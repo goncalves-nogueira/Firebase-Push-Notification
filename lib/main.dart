@@ -1,6 +1,23 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
-void main() {
+import 'firebase_messaging/custom_firebase_messaging.dart';
+import 'remote_config/custom_morete_config.dart';
+import 'remote_config/custom_visible_rc_widget.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp();
+
+  await CustomRemoteConfig().initialize();
+
+  await CustomFirebaseMessaging().inicialize(
+    callback: () => CustomRemoteConfig().forceFetch(),
+  );
+
   runApp(const MyApp());
 }
 
@@ -11,10 +28,20 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      navigatorKey: navigatorKey,
+      theme: ThemeData(primarySwatch: Colors.blue),
+      initialRoute: '/home',
+      routes: {
+        '/home': (_) => const MyHomePage(title: 'home page'),
+        '/virtual': (_) => Scaffold(
+              appBar: AppBar(),
+              body: const SizedBox.expand(
+                child: Center(
+                  child: Text('Virtual Page'),
+                ),
+              ),
+            )
+      },
     );
   }
 }
@@ -29,38 +56,56 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  bool _isLoading = false;
 
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
+  void _incrementCounter() async {
+    setState(() => _isLoading = true);
+    await CustomRemoteConfig().forceFetch();
+    setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: CustomRemoteConfig().getValueOrDefault(
+          key: 'isActiveBlue',
+          defaultValue: false,
+        )
+            ? Colors.blue
+            : Colors.red,
         title: Text(widget.title),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(
+                    CustomRemoteConfig()
+                        .getValueOrDefault(
+                          key: 'novaString',
+                          defaultValue: 'defaultValue',
+                        )
+                        .toString(),
+                    style: Theme.of(context).textTheme.headline4,
+                  ),
+                  CustomVisibleRCWidget(
+                    rmKey: 'show_container',
+                    defaultValue: false,
+                    child: Container(
+                      color: Colors.blue,
+                      height: 100,
+                      width: 100,
+                    ),
+                  )
+                ],
+              ),
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
-        ),
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.refresh),
       ),
     );
   }
